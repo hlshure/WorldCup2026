@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="World Cup 26" />
+<meta name="theme-color" content="#000000" />
+<meta name="description" content="World Cup 2026 Knockout Stage Tracker" />
+<title>World Cup 26</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body,#root{height:100%;background:#000;overscroll-behavior:none;}
+  ::-webkit-scrollbar{display:none;}
+  @keyframes livePulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.45;transform:scale(0.8);}}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  @keyframes capsuleIn{from{opacity:0;transform:translate(-50%,-14px);}to{opacity:1;transform:translate(-50%,0);}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+/* ════════════════════════════════════════════════════════════════════════
+   INLINE ICONS — original minimal line-icon set, zero external dependency
+   ════════════════════════════════════════════════════════════════════════ */
+const Icon = ({ children, size=20, color='currentColor', style, ...rest }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"
+       strokeLinecap="round" strokeLinejoin="round" style={style} {...rest}>{children}</svg>
+);
+const IconTrophy = (p) => <Icon {...p}><path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"/><path d="M8 4H5a2 2 0 0 0 0 4h1M16 4h3a2 2 0 0 1 0 4h-1"/><path d="M10 15v3M14 15v3M8 21h8M9 18h6"/></Icon>;
+const IconCalendar = (p) => <Icon {...p}><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></Icon>;
+const IconMapPin = (p) => <Icon {...p}><path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></Icon>;
+const IconClock = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></Icon>;
+const IconChevronRight = (p) => <Icon {...p}><polyline points="9 6 15 12 9 18"/></Icon>;
+const IconX = (p) => <Icon {...p}><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></Icon>;
+const IconRefresh = (p) => <Icon {...p}><path d="M21 12a9 9 0 1 1-2.6-6.4"/><polyline points="21 4 21 9 16 9"/></Icon>;
+const IconNewspaper = (p) => <Icon {...p}><rect x="3" y="5" width="14" height="16" rx="1"/><line x1="7" y1="9" x2="13" y2="9"/><line x1="7" y1="13" x2="13" y2="13"/><line x1="7" y1="17" x2="11" y2="17"/><path d="M17 8h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8"/></Icon>;
+const IconArrowUpCircle = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><polyline points="8 12 12 8 16 12"/><line x1="12" y1="16" x2="12" y2="8"/></Icon>;
+
+/* ════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — iOS 18 dark mode, authentic system values
+   ════════════════════════════════════════════════════════════════════════ */
+const BG        = '#000000';
+const CARD      = 'rgba(28,28,30,0.78)';
+const CARD2     = 'rgba(44,44,46,0.85)';
+const HAIRLINE  = 'rgba(255,255,255,0.09)';
+const LABEL     = '#FFFFFF';
+const LABEL2    = 'rgba(235,235,245,0.60)';
+const LABEL3    = 'rgba(235,235,245,0.30)';
+const RED       = '#FF3B30';
+const GREEN     = '#30D158';
+const BLUE      = '#0A84FF';
+const GOLD      = '#FFD60A';
+const EASE      = 'cubic-bezier(0.32,0.72,0,1)';
+
+const FONT_UI    = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Inter, system-ui, sans-serif";
+const FONT_ROUND = "ui-rounded, -apple-system, 'SF Pro Rounded', Inter, sans-serif";
+const FONT_MONO  = "ui-monospace, 'SF Mono', 'Space Mono', monospace";
+
+/* ════════════════════════════════════════════════════════════════════════
+   TEAM DATA
+   ════════════════════════════════════════════════════════════════════════ */
+const FLAGS = {
+  MEX:'🇲🇽',RSA:'🇿🇦',KOR:'🇰🇷',CZE:'🇨🇿',CAN:'🇨🇦',BIH:'🇧🇦',QAT:'🇶🇦',SUI:'🇨🇭',
+  BRA:'🇧🇷',MAR:'🇲🇦',HAI:'🇭🇹',SCO:'🏴',USA:'🇺🇸',PAR:'🇵🇾',AUS:'🇦🇺',TUR:'🇹🇷',
+  GER:'🇩🇪',CUW:'🇨🇼',CIV:'🇨🇮',ECU:'🇪🇨',NED:'🇳🇱',JPN:'🇯🇵',SWE:'🇸🇪',TUN:'🇹🇳',
+  BEL:'🇧🇪',EGY:'🇪🇬',IRN:'🇮🇷',NZL:'🇳🇿',ESP:'🇪🇸',CPV:'🇨🇻',KSA:'🇸🇦',URU:'🇺🇾',
+  FRA:'🇫🇷',SEN:'🇸🇳',IRQ:'🇮🇶',NOR:'🇳🇴',ARG:'🇦🇷',ALG:'🇩🇿',AUT:'🇦🇹',JOR:'🇯🇴',
+  POR:'🇵🇹',COD:'🇨🇩',UZB:'🇺🇿',COL:'🇨🇴',ENG:'🏴',CRO:'🇭🇷',GHA:'🇬🇭',PAN:'🇵🇦',
+};
+const T = (code, name) => ({ code, name, flag: FLAGS[code] || '🏳️' });
+const TEAMS = {
+  MEX:T('MEX','Mexico'), RSA:T('RSA','South Africa'), KOR:T('KOR','South Korea'), CZE:T('CZE','Czechia'),
+  CAN:T('CAN','Canada'), BIH:T('BIH','Bosnia & Herz.'), QAT:T('QAT','Qatar'), SUI:T('SUI','Switzerland'),
+  BRA:T('BRA','Brazil'), MAR:T('MAR','Morocco'), HAI:T('HAI','Haiti'), SCO:T('SCO','Scotland'),
+  USA:T('USA','USA'), PAR:T('PAR','Paraguay'), AUS:T('AUS','Australia'), TUR:T('TUR','Türkiye'),
+  GER:T('GER','Germany'), CUW:T('CUW','Curaçao'), CIV:T('CIV','Ivory Coast'), ECU:T('ECU','Ecuador'),
+  NED:T('NED','Netherlands'), JPN:T('JPN','Japan'), SWE:T('SWE','Sweden'), TUN:T('TUN','Tunisia'),
+  BEL:T('BEL','Belgium'), EGY:T('EGY','Egypt'), IRN:T('IRN','IR Iran'), NZL:T('NZL','New Zealand'),
+  ESP:T('ESP','Spain'), CPV:T('CPV','Cabo Verde'), KSA:T('KSA','Saudi Arabia'), URU:T('URU','Uruguay'),
+  FRA:T('FRA','France'), SEN:T('SEN','Senegal'), IRQ:T('IRQ','Iraq'), NOR:T('NOR','Norway'),
+  ARG:T('ARG','Argentina'), ALG:T('ALG','Algeria'), AUT:T('AUT','Austria'), JOR:T('JOR','Jordan'),
+  POR:T('POR','Portugal'), COD:T('COD','DR Congo'), UZB:T('UZB','Uzbekistan'), COL:T('COL','Colombia'),
+  ENG:T('ENG','England'), CRO:T('CRO','Croatia'), GHA:T('GHA','Ghana'), PAN:T('PAN','Panama'),
+};
+
+// ESPN abbreviation quirks -> our codes
+const ESPN_ABBR_MAP = {
+  US:'USA', USMNT:'USA', SK:'KOR', BOS:'BIH', TKY:'TUR', TKR:'TUR', IRI:'IRN', SA:'KSA',
+  DRC:'COD', ARS:'ARG', MOR:'MAR', NL:'NED',
+};
+const ALIASES = {
+  USA: ['united states', 'usmnt', 'us'], CIV: ["cote d'ivoire", 'cote divoire', "côte d'ivoire", 'ivory coast'],
+  COD: ['dr congo', 'congo dr', 'drc', 'democratic republic of congo'],
+  BIH: ['bosnia and herzegovina', 'bosnia-herzegovina', 'bosnia & herzegovina', 'bosnia'],
+  KOR: ['south korea', 'korea republic'], CZE: ['czechia', 'czech republic'],
+  NED: ['netherlands', 'holland'], KSA: ['saudi arabia'],
+};
+function normalizeName(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').trim();
+}
+function matchTeamCode(searchTerm) {
+  const n = normalizeName(searchTerm);
+  if (!n) return null;
+  for (const code of Object.keys(TEAMS)) { if (normalizeName(TEAMS[code].name) === n || normalizeName(code) === n) return code; }
+  for (const [code, aliases] of Object.entries(ALIASES)) { if (aliases.some(a => normalizeName(a) === n)) return code; }
+  for (const code of Object.keys(TEAMS)) { const nm = normalizeName(TEAMS[code].name); if (n.includes(nm) || nm.includes(n)) return code; }
+  for (const [code, aliases] of Object.entries(ALIASES)) { if (aliases.some(a => n.includes(normalizeName(a)) || normalizeName(a).includes(n))) return code; }
+  return null;
+}
+function resolveTeamCode(abbr, displayName) {
+  if (abbr && TEAMS[abbr]) return abbr;
+  if (abbr && ESPN_ABBR_MAP[abbr]) return ESPN_ABBR_MAP[abbr];
+  return matchTeamCode(displayName) || matchTeamCode(abbr);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   BRACKET DATA — real 2026 Round of 32, seeded with confirmed results
+   ════════════════════════════════════════════════════════════════════════ */
+const V = (name, city) => ({ name, city });
+
+const R32_SEED = [
+  { id:'r32-1', date:'2026-06-28', time:'12:00 PM ET', venue:V('SoFi Stadium','Los Angeles, USA'),
+    home:'CAN', away:'RSA', status:'final', homeScore:1, awayScore:0, scoreKnown:true,
+    note:"Eustáquio's 92nd-minute strike sends Canada into its first-ever World Cup knockout win." },
+  { id:'r32-2', date:'2026-06-29', time:'1:00 PM ET', venue:V('NRG Stadium','Houston, USA'),
+    home:'BRA', away:'JPN', status:'final', winnerCode:'BRA', scoreKnown:false,
+    note:'Brazil survive a scare, breaking through late to avoid a shock exit.' },
+  { id:'r32-3', date:'2026-06-29', time:'4:30 PM ET', venue:V('Gillette Stadium','Foxborough, USA'),
+    home:'GER', away:'PAR', status:'final-penalties', winnerCode:'PAR', scoreKnown:false,
+    note:'Paraguay stun four-time champions Germany on penalties — a seismic upset.' },
+  { id:'r32-4', date:'2026-06-29', time:'9:00 PM ET', venue:V('Estadio BBVA','Monterrey, MX'),
+    home:'NED', away:'MAR', status:'final-penalties', winnerCode:'MAR', scoreKnown:false,
+    note:"Morocco win on penalties after Issa Diop's stoppage-time equalizer forced extra time." },
+  { id:'r32-5', date:'2026-06-30', time:'1:00 PM ET', venue:V('AT&T Stadium','Arlington, USA'),
+    home:'CIV', away:'NOR', status:'final', homeScore:1, awayScore:2, scoreKnown:true,
+    note:"Erling Haaland scores the winner as Norway claims their first-ever World Cup knockout victory." },
+  { id:'r32-6', date:'2026-06-30', time:'4:00 PM ET', venue:V('MetLife Stadium','East Rutherford, USA'),
+    home:'FRA', away:'SWE', status:'final', homeScore:3, awayScore:0, scoreKnown:true,
+    note:"Kylian Mbappé's brace headlines a dominant French performance." },
+  { id:'r32-7', date:'2026-06-30', time:'9:00 PM ET', venue:V('Estadio Azteca','Mexico City, MX'),
+    home:'MEX', away:'ECU', status:'scheduled', note:'' },
+  { id:'r32-8', date:'2026-07-01', time:'12:00 PM ET', venue:V('Mercedes-Benz Stadium','Atlanta, USA'),
+    home:'ENG', away:'COD', status:'scheduled', note:'' },
+  { id:'r32-9', date:'2026-07-01', time:'4:00 PM ET', venue:V('Lumen Field','Seattle, USA'),
+    home:'BEL', away:'SEN', status:'scheduled', note:'' },
+  { id:'r32-10', date:'2026-07-01', time:'8:00 PM ET', venue:V("Levi's Stadium",'Santa Clara, USA'),
+    home:'USA', away:'BIH', status:'scheduled', note:'' },
+  { id:'r32-11', date:'2026-07-02', time:'3:00 PM ET', venue:V('SoFi Stadium','Los Angeles, USA'),
+    home:'ESP', away:'AUT', status:'scheduled', note:'' },
+  { id:'r32-12', date:'2026-07-02', time:'7:00 PM ET', venue:V('BMO Field','Toronto, CA'),
+    home:'POR', away:'CRO', status:'scheduled', note:'' },
+  { id:'r32-13', date:'2026-07-02', time:'11:00 PM ET', venue:V('BC Place','Vancouver, CA'),
+    home:'SUI', away:'ALG', status:'scheduled', note:'' },
+  { id:'r32-14', date:'2026-07-03', time:null, venue:null,
+    home:'EGY', away:'AUS', status:'scheduled', note:'' },
+  { id:'r32-15', date:'2026-07-03', time:null, venue:null,
+    home:'ARG', away:'CPV', status:'scheduled', note:'' },
+  { id:'r32-16', date:'2026-07-03', time:null, venue:null,
+    home:'COL', away:'GHA', status:'scheduled', note:'' },
+];
+
+const R16_SEED = [
+  { id:'r16-1', date:'2026-07-04', time:'1:00 PM ET', venue:V('NRG Stadium','Houston, USA'),
+    home:'MAR', away:'CAN', status:'scheduled', note:'',
+    lineage: 'Winners of Netherlands/Morocco and Canada/South Africa' },
+];
+
+const ROUND_META = {
+  R32:  { label:'Round of 32',  short:'R32',  dateRange:'Jun 28 – Jul 3' },
+  R16:  { label:'Round of 16',  short:'R16',  dateRange:'Jul 4 – Jul 7' },
+  QF:   { label:'Quarterfinals',short:'QF',   dateRange:'Jul 9 – Jul 11' },
+  SF:   { label:'Semifinals',   short:'SF',   dateRange:'Jul 14 – Jul 15' },
+  F:    { label:'Final',        short:'FIN',  dateRange:'Jul 19', venue:V('MetLife Stadium','East Rutherford, USA') },
+};
+const ROUND_ORDER = ['R32','R16','QF','SF','F'];
+
+const STORYLINES = [
+  { headline: 'Germany stunned on penalties', blurb: 'Four-time champions Germany are out after Paraguay won a dramatic penalty shootout in the Round of 32.' },
+  { headline: 'Morocco edge the Netherlands', blurb: 'A stoppage-time equalizer forced extra time before Morocco prevailed on penalties to end a heartbreaking Dutch run.' },
+  { headline: 'Canada makes history', blurb: "Stephen Eustáquio's 92nd-minute winner gave Canada its first-ever World Cup knockout victory over South Africa." },
+];
+
+/* ════════════════════════════════════════════════════════════════════════
+   DATE HELPERS
+   ════════════════════════════════════════════════════════════════════════ */
+const todayS = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const toKey  = s => s.replace(/-/g,'');
+const fmtDay   = s => new Date(s+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'});
+const fmtNum   = s => new Date(s+'T12:00:00Z').getUTCDate();
+const fmtLong  = s => new Date(s+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'UTC'});
+const isLiveStatus = s => s==='live' || s==='halftime' || s==='extratime';
+const isFinalStatus = s => s==='final' || s==='final-penalties' || s==='final-extratime';
+
+function inferRound(dateStr) {
+  if (!dateStr) return 'R32';
+  if (dateStr <= '2026-07-03') return 'R32';
+  if (dateStr <= '2026-07-07') return 'R16';
+  if (dateStr <= '2026-07-11') return 'QF';
+  if (dateStr <= '2026-07-16') return 'SF';
+  return 'F';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   ESPN LIVE DATA — direct scoreboard fetch, no server needed
+   ════════════════════════════════════════════════════════════════════════ */
+async function fetchESPN(dateKey) {
+  const urls = [
+    `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateKey}&limit=50`,
+    `https://cdn.espn.com/core/soccer/scoreboard?xhr=1&league=fifa.world&dates=${dateKey}&limit=50`,
+  ];
+  let lastErr;
+  for (const url of urls) {
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 10000);
+      const r = await fetch(url, { signal: controller.signal });
+      clearTimeout(t);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      const events = d.events || (d.content && d.content.sbData && d.content.sbData.events) || [];
+      return events.map(parseESPNEvent);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('ESPN fetch failed');
+}
+
+function parseESPNEvent(e) {
+  const comp = (e.competitions || [])[0] || {};
+  const cs = comp.competitors || [];
+  const home = cs.find(c => c.homeAway === 'home') || cs[0] || {};
+  const away = cs.find(c => c.homeAway === 'away') || cs[1] || {};
+  const typeName = ((e.status && e.status.type && e.status.type.name) || '').toUpperCase();
+  const detail = ((e.status && e.status.type && (e.status.type.detail || e.status.type.shortDetail)) || '').toLowerCase();
+  const completed = e.status && e.status.type && e.status.type.completed;
+
+  let status = 'scheduled';
+  if (completed || typeName.includes('FINAL')) status = 'final';
+  else if (typeName.includes('HALFTIME')) status = 'halftime';
+  else if (typeName.includes('PROGRESS') || typeName.includes('LIVE')) status = 'live';
+  if (status === 'final' && detail.includes('pen')) status = 'final-penalties';
+  else if (status === 'final' && (detail.includes('a.e.t') || detail.includes('extra'))) status = 'final-extratime';
+
+  const homeCode = resolveTeamCode(home.team && home.team.abbreviation, home.team && home.team.displayName);
+  const awayCode = resolveTeamCode(away.team && away.team.abbreviation, away.team && away.team.displayName);
+  const notStarted = status === 'scheduled';
+
+  let venue = null;
+  if (comp.venue && comp.venue.fullName) {
+    const city = comp.venue.address ? [comp.venue.address.city, comp.venue.address.country].filter(Boolean).join(', ') : '';
+    venue = { name: comp.venue.fullName, city };
+  }
+
+  return {
+    homeCode, awayCode, status, venue,
+    date: e.date ? e.date.slice(0,10) : null,
+    clock: (e.status && e.status.displayClock) || null,
+    homeScore: notStarted ? null : (parseInt(home.score, 10) || 0),
+    awayScore: notStarted ? null : (parseInt(away.score, 10) || 0),
+  };
+}
+
+function useLiveData() {
+  const [matches, setMatches] = useState(() => {
+    const m = {};
+    R32_SEED.forEach(x => { m[x.id] = { ...x, round: 'R32' }; });
+    R16_SEED.forEach(x => { m[x.id] = { ...x, round: 'R16' }; });
+    return m;
+  });
+  const [checking, setChecking] = useState(false);
+  const [liveEngineOk, setLiveEngineOk] = useState(true);
+  const failCountRef = useRef(0);
+  const timerRef = useRef(null);
+  const matchesRef = useRef(matches);
+  matchesRef.current = matches;
+  const backfilledRef = useRef(false);
+
+  const matchList = useMemo(() => Object.values(matches), [matches]);
+
+  const mergeEvents = useCallback((events) => {
+    setMatches(prev => {
+      const next = { ...prev };
+      events.forEach(ev => {
+        if (!ev.homeCode || !ev.awayCode) return;
+        const found = Object.values(next).find(m =>
+          (m.home === ev.homeCode && m.away === ev.awayCode) || (m.home === ev.awayCode && m.away === ev.homeCode)
+        );
+        if (found) {
+          const flip = found.home === ev.awayCode;
+          next[found.id] = {
+            ...found,
+            status: ev.status || found.status,
+            homeScore: ev.homeScore == null ? found.homeScore : (flip ? ev.awayScore : ev.homeScore),
+            awayScore: ev.awayScore == null ? found.awayScore : (flip ? ev.homeScore : ev.awayScore),
+            minute: ev.clock || found.minute,
+            venue: found.venue || ev.venue,
+            scoreKnown: ev.homeScore != null ? true : found.scoreKnown,
+          };
+        } else if (TEAMS[ev.homeCode] && TEAMS[ev.awayCode]) {
+          // Auto-discover matchups ESPN knows about that we haven't seeded yet (R16 onward)
+          const round = inferRound(ev.date);
+          const newId = `espn-${ev.homeCode}-${ev.awayCode}-${ev.date || todayS()}`;
+          if (!next[newId]) {
+            next[newId] = {
+              id: newId, round, date: ev.date, time: null, venue: ev.venue,
+              home: ev.homeCode, away: ev.awayCode, status: ev.status,
+              homeScore: ev.homeScore, awayScore: ev.awayScore, minute: ev.clock,
+              scoreKnown: ev.homeScore != null, note: '',
+            };
+          }
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const refreshToday = useCallback(async () => {
+    setChecking(true);
+    try {
+      const events = await fetchESPN(toKey(todayS()));
+      mergeEvents(events);
+      setLiveEngineOk(true);
+      failCountRef.current = 0;
+    } catch (e) {
+      failCountRef.current += 1;
+      if (failCountRef.current >= 3) setLiveEngineOk(false);
+    }
+    setChecking(false);
+  }, [mergeEvents]);
+
+  const backfillUnknownScores = useCallback(async () => {
+    const dates = [...new Set(Object.values(matchesRef.current)
+      .filter(m => isFinalStatus(m.status) && m.scoreKnown === false && m.date)
+      .map(m => m.date))];
+    for (const d of dates) {
+      try { const events = await fetchESPN(toKey(d)); mergeEvents(events); } catch (e) {}
+    }
+  }, [mergeEvents]);
+
+  // Tiered auto-refresh scheduler
+  useEffect(() => {
+    const schedule = () => {
+      const list = Object.values(matchesRef.current);
+      const hasLive = list.some(m => isLiveStatus(m.status));
+      const today = todayS();
+      const soonKickoff = list.some(m => {
+        if (m.status !== 'scheduled' || !m.date || !m.time) return false;
+        if (m.date !== today) return false;
+        const kickoff = new Date(`${m.date} ${m.time.replace(' ET','')}`);
+        const diff = kickoff - new Date();
+        return diff > 0 && diff < 30 * 60000;
+      });
+      let interval = 15 * 60000;
+      if (hasLive) interval = 60000;
+      else if (soonKickoff) interval = 3 * 60000;
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(async () => { await refreshToday(); schedule(); }, interval);
+    };
+    schedule();
+    return () => clearTimeout(timerRef.current);
+  }, [refreshToday]);
+
+  // Initial load: today + backfill any unresolved historical scores
+  useEffect(() => {
+    (async () => {
+      await refreshToday();
+      if (!backfilledRef.current) { backfilledRef.current = true; await backfillUnknownScores(); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const manualRefresh = useCallback(async () => { await refreshToday(); }, [refreshToday]);
+
+  return { matches: matchList, storylines: STORYLINES, checking, liveEngineOk, manualRefresh };
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   SMALL UI PRIMITIVES
+   ════════════════════════════════════════════════════════════════════════ */
+function TeamFlag({ code, size = 28 }) {
+  return <span style={{ fontSize: size, lineHeight: 1 }}>{(TEAMS[code] && TEAMS[code].flag) || '🏳️'}</span>;
+}
+
+function StatusPill({ match }) {
+  const s = match.status;
+  if (isLiveStatus(s)) {
+    const label = s === 'halftime' ? 'HT' : s === 'extratime' ? 'ET' : `${match.minute || ''}`;
+    return (
+      <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 9px', borderRadius:20, background:'rgba(255,59,48,0.16)' }}>
+        <span style={{ width:6, height:6, borderRadius:'50%', background:RED, display:'inline-block', animation:'livePulse 1.2s ease-in-out infinite' }}/>
+        <span style={{ fontSize:12, fontWeight:700, color:RED, fontFamily:FONT_MONO }}>{label}</span>
+      </span>
+    );
+  }
+  if (isFinalStatus(s)) {
+    return <span style={{ fontSize:12, fontWeight:600, color:LABEL2, letterSpacing:0.2 }}>
+      {s === 'final-penalties' ? 'FT · PEN' : s === 'final-extratime' ? 'FT · AET' : 'FT'}
+    </span>;
+  }
+  return <span style={{ fontSize:12, fontWeight:600, color:LABEL2, fontFamily:FONT_MONO }}>{match.time || 'TBD'}</span>;
+}
+
+function ScoreOrTime({ match, big=false }) {
+  if (match.homeScore != null && match.awayScore != null) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', gap:6, fontFamily:FONT_ROUND, fontWeight:700, fontSize: big?40:22, color:LABEL, fontVariantNumeric:'tabular-nums' }}>
+        <span>{match.homeScore}</span><span style={{ color:LABEL3, fontWeight:400 }}>–</span><span>{match.awayScore}</span>
+      </div>
+    );
+  }
+  if (isFinalStatus(match.status)) {
+    const winnerCode = match.winnerCode || (match.homeScore > match.awayScore ? match.home : match.away);
+    return <div style={{ fontSize: big?15:12, fontWeight:700, color:GREEN, textAlign:'center' }}>{(TEAMS[winnerCode] && TEAMS[winnerCode].name) || '—'} W</div>;
+  }
+  return <div style={{ fontSize: big?17:13, fontWeight:600, color:LABEL3 }}>vs</div>;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LIVE ACTIVITY CAPSULE — the signature element
+   ════════════════════════════════════════════════════════════════════════ */
+function LiveActivityCapsule({ liveMatches, onTap }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (liveMatches.length <= 1) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % liveMatches.length), 4000);
+    return () => clearInterval(t);
+  }, [liveMatches.length]);
+
+  if (liveMatches.length === 0) return null;
+  const m = liveMatches[idx % liveMatches.length];
+  const label = m.status === 'halftime' ? 'HT' : m.status === 'extratime' ? 'ET' : (m.minute || '');
+
+  return (
+    <button
+      onClick={() => onTap(m)}
+      style={{
+        position:'fixed', top:'calc(env(safe-area-inset-top) + 6px)', left:'50%', transform:'translateX(-50%)',
+        zIndex:60, display:'flex', alignItems:'center', gap:8,
+        background:'rgba(20,20,22,0.92)', backdropFilter:'blur(24px) saturate(180%)', WebkitBackdropFilter:'blur(24px) saturate(180%)',
+        border:'1px solid rgba(255,255,255,0.12)', borderRadius:22, padding:'7px 16px 7px 12px',
+        boxShadow:'0 8px 24px rgba(0,0,0,0.5)', cursor:'pointer', maxWidth:'88vw',
+        animation:'capsuleIn 0.4s ' + EASE,
+      }}
+    >
+      <span style={{ width:7, height:7, borderRadius:'50%', background:RED, flexShrink:0, animation:'livePulse 1.2s ease-in-out infinite' }}/>
+      <TeamFlag code={m.home} size={16}/>
+      <span style={{ fontFamily:FONT_ROUND, fontWeight:700, fontSize:14, color:LABEL, fontVariantNumeric:'tabular-nums' }}>
+        {m.homeScore ?? 0}–{m.awayScore ?? 0}
+      </span>
+      <TeamFlag code={m.away} size={16}/>
+      <span style={{ width:1, height:12, background:HAIRLINE, margin:'0 1px' }}/>
+      <span style={{ fontSize:12, fontWeight:700, color:RED, fontFamily:FONT_MONO }}>{label}</span>
+      {liveMatches.length > 1 && (
+        <div style={{ display:'flex', gap:3, marginLeft:2 }}>
+          {liveMatches.map((_,i) => (
+            <span key={i} style={{ width:4, height:4, borderRadius:'50%', background: i===idx? LABEL2 : 'rgba(255,255,255,0.2)' }}/>
+          ))}
+        </div>
+      )}
+    </button>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   SEGMENTED CONTROL — iOS UISegmentedControl
+   ════════════════════════════════════════════════════════════════════════ */
+function SegmentedControl({ options, value, onChange }) {
+  return (
+    <div style={{ display:'flex', background:'rgba(118,118,128,0.24)', borderRadius:9, padding:2, gap:2 }}>
+      {options.map(opt => (
+        <button key={opt.value} onClick={() => onChange(opt.value)} style={{
+          flex:1, padding:'6px 4px', borderRadius:7, border:'none', cursor:'pointer',
+          background: value===opt.value ? '#636366' : 'transparent',
+          color: value===opt.value ? LABEL : LABEL2,
+          fontSize:13, fontWeight:600, fontFamily:FONT_UI,
+          transition:`background ${EASE} 0.2s`,
+        }}>
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   MATCH ROW
+   ════════════════════════════════════════════════════════════════════════ */
+function MatchRow({ match, onTap }) {
+  const home = TEAMS[match.home], away = TEAMS[match.away];
+  const live = isLiveStatus(match.status);
+  return (
+    <button onClick={() => onTap(match)} style={{
+      width:'100%', textAlign:'left', background:CARD, backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
+      border:`1px solid ${live ? 'rgba(255,59,48,0.35)' : HAIRLINE}`, borderRadius:16, padding:'13px 14px',
+      display:'flex', alignItems:'center', gap:10, marginBottom:8, cursor:'pointer',
+      boxShadow: live ? '0 0 0 1px rgba(255,59,48,0.08), 0 4px 20px rgba(255,59,48,0.10)' : 'none',
+    }}>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+          <TeamFlag code={match.home} size={20}/>
+          <span style={{ fontSize:15, fontWeight:600, color:LABEL, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{home && home.name}</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <TeamFlag code={match.away} size={20}/>
+          <span style={{ fontSize:15, fontWeight:600, color:LABEL, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{away && away.name}</span>
+        </div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6, flexShrink:0 }}>
+        <StatusPill match={match}/>
+        <ScoreOrTime match={match}/>
+      </div>
+      <IconChevronRight size={16} color={LABEL3} style={{ flexShrink:0 }}/>
+    </button>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   MATCH DETAIL SHEET — iOS bottom sheet with drag-to-dismiss
+   ════════════════════════════════════════════════════════════════════════ */
+function MatchSheet({ match, onClose }) {
+  const [dragY, setDragY] = useState(0);
+  const startYRef = useRef(null);
+  const draggingRef = useRef(false);
+
+  const onTouchStart = (e) => { startYRef.current = e.touches[0].clientY; draggingRef.current = true; };
+  const onTouchMove = (e) => {
+    if (!draggingRef.current) return;
+    const delta = e.touches[0].clientY - startYRef.current;
+    if (delta > 0) setDragY(delta);
+  };
+  const onTouchEnd = () => {
+    draggingRef.current = false;
+    if (dragY > 110) onClose(); else setDragY(0);
+  };
+
+  if (!match) return null;
+  const home = TEAMS[match.home], away = TEAMS[match.away];
+  const round = (ROUND_META[match.round] && ROUND_META[match.round].label) || match.round;
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:100 }}>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.55)', animation:'fadeIn 0.25s ease' }}/>
+      <div
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+        style={{
+          position:'absolute', bottom:0, left:0, right:0, maxHeight:'85vh', overflowY:'auto',
+          background:'#1C1C1E', borderRadius:'20px 20px 0 0', paddingBottom:'calc(28px + env(safe-area-inset-bottom))',
+          transform:`translateY(${dragY}px)`, transition: dragY===0 ? `transform 0.35s ${EASE}` : 'none',
+          animation:'sheetUp 0.35s ' + EASE,
+        }}
+      >
+        <div style={{ display:'flex', justifyContent:'center', padding:'10px 0 4px' }}>
+          <div style={{ width:36, height:5, borderRadius:3, background:'rgba(255,255,255,0.28)' }}/>
+        </div>
+
+        <div style={{ padding:'8px 20px 0', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+          <div>
+            <div style={{ fontSize:12, fontWeight:700, color:BLUE, textTransform:'uppercase', letterSpacing:0.4 }}>{round}</div>
+            <StatusPill match={match}/>
+          </div>
+          <button onClick={onClose} style={{ background:'rgba(118,118,128,0.24)', border:'none', borderRadius:'50%', width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            <IconX size={16} color={LABEL2}/>
+          </button>
+        </div>
+
+        <div style={{ padding:'22px 20px', display:'grid', gridTemplateColumns:'1fr auto 1fr', alignItems:'center', gap:12 }}>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontSize:52, lineHeight:1 }}>{home && home.flag}</div>
+            <div style={{ fontSize:15, fontWeight:700, color:LABEL, marginTop:8 }}>{home && home.name}</div>
+          </div>
+          <ScoreOrTime match={match} big/>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontSize:52, lineHeight:1 }}>{away && away.flag}</div>
+            <div style={{ fontSize:15, fontWeight:700, color:LABEL, marginTop:8 }}>{away && away.name}</div>
+          </div>
+        </div>
+
+        <div style={{ margin:'0 20px', height:1, background:HAIRLINE }}/>
+
+        <div style={{ padding:'18px 20px', display:'flex', flexDirection:'column', gap:14 }}>
+          {match.venue && (
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <IconMapPin size={16} color={LABEL2}/>
+              <div>
+                <div style={{ fontSize:14, fontWeight:600, color:LABEL }}>{match.venue.name}</div>
+                <div style={{ fontSize:12, color:LABEL2 }}>{match.venue.city}</div>
+              </div>
+            </div>
+          )}
+          {match.date && (
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <IconCalendar size={16} color={LABEL2}/>
+              <div style={{ fontSize:14, fontWeight:600, color:LABEL }}>{fmtLong(match.date)}</div>
+            </div>
+          )}
+          {match.time && !isFinalStatus(match.status) && (
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <IconClock size={16} color={LABEL2}/>
+              <div style={{ fontSize:14, fontWeight:600, color:LABEL }}>{match.time}</div>
+            </div>
+          )}
+          {match.lineage && (
+            <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+              <IconArrowUpCircle size={16} color={LABEL2} style={{ marginTop:1 }}/>
+              <div style={{ fontSize:13, color:LABEL2, lineHeight:1.4 }}>{match.lineage}</div>
+            </div>
+          )}
+        </div>
+
+        {match.note && (
+          <div style={{ margin:'0 20px', padding:'14px 16px', background:CARD2, borderRadius:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:LABEL2, textTransform:'uppercase', letterSpacing:0.4, marginBottom:6 }}>Recap</div>
+            <div style={{ fontSize:14, color:LABEL, lineHeight:1.5 }}>{match.note}</div>
+          </div>
+        )}
+        {!match.note && match.status === 'scheduled' && (
+          <div style={{ margin:'0 20px', padding:'14px 16px', background:CARD2, borderRadius:14, display:'flex', alignItems:'center', gap:10 }}>
+            <IconClock size={16} color={LABEL2}/>
+            <div style={{ fontSize:13, color:LABEL2 }}>Kickoff hasn't happened yet — check back soon.</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   STORYLINES CAROUSEL
+   ════════════════════════════════════════════════════════════════════════ */
+function StorylinesCarousel({ storylines }) {
+  return (
+    <div style={{ marginBottom:20 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, padding:'0 16px', marginBottom:10 }}>
+        <IconNewspaper size={14} color={LABEL2}/>
+        <span style={{ fontSize:12, fontWeight:700, color:LABEL2, textTransform:'uppercase', letterSpacing:0.5 }}>Storylines</span>
+      </div>
+      <div style={{ display:'flex', gap:10, overflowX:'auto', padding:'0 16px 4px', scrollbarWidth:'none' }}>
+        {storylines.map((s, i) => (
+          <div key={i} style={{
+            minWidth:230, maxWidth:230, background:CARD, backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
+            border:`1px solid ${HAIRLINE}`, borderRadius:16, padding:'14px 15px', flexShrink:0,
+          }}>
+            <div style={{ fontSize:14, fontWeight:700, color:LABEL, marginBottom:6, lineHeight:1.25 }}>{s.headline}</div>
+            <div style={{ fontSize:12.5, color:LABEL2, lineHeight:1.45 }}>{s.blurb}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   TODAY TAB
+   ════════════════════════════════════════════════════════════════════════ */
+function TodayTab({ matches, storylines, onTapMatch }) {
+  const [round, setRound] = useState('R32');
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = todayS();
+    const r32Dates = [...new Set(R32_SEED.map(m => m.date))];
+    return r32Dates.includes(today) ? today : (r32Dates.find(d => d >= today) || r32Dates[0]);
+  });
+
+  const roundMatches = useMemo(() => matches.filter(m => m.round === round).sort((a,b) => (a.date+String(a.time)).localeCompare(b.date+String(b.time))), [matches, round]);
+  const dates = useMemo(() => [...new Set(roundMatches.map(m => m.date).filter(Boolean))], [roundMatches]);
+  const dayMatches = useMemo(() => roundMatches.filter(m => m.date === selectedDate), [roundMatches, selectedDate]);
+
+  useEffect(() => {
+    if (dates.length > 0 && !dates.includes(selectedDate)) setSelectedDate(dates[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [round]);
+
+  return (
+    <div>
+      <StorylinesCarousel storylines={storylines}/>
+
+      <div style={{ padding:'0 16px', marginBottom:14 }}>
+        <SegmentedControl
+          value={round} onChange={setRound}
+          options={ROUND_ORDER.map(r => ({ value:r, label: ROUND_META[r].short }))}
+        />
+      </div>
+
+      {dates.length > 0 ? (
+        <>
+          <div style={{ display:'flex', gap:6, overflowX:'auto', padding:'0 16px 14px', scrollbarWidth:'none' }}>
+            {dates.map(d => {
+              const isToday = d === todayS();
+              const isSel = d === selectedDate;
+              return (
+                <button key={d} onClick={() => setSelectedDate(d)} style={{
+                  display:'flex', flexDirection:'column', alignItems:'center', gap:1,
+                  padding:'7px 12px', borderRadius:13, border:'none', cursor:'pointer', minWidth:46, flexShrink:0,
+                  background: isSel ? LABEL : isToday ? 'rgba(255,59,48,0.15)' : 'rgba(118,118,128,0.18)',
+                }}>
+                  <span style={{ fontSize:9.5, fontWeight:700, textTransform:'uppercase', color: isSel ? '#000' : isToday ? RED : LABEL2 }}>{fmtDay(d)}</span>
+                  <span style={{ fontFamily:FONT_ROUND, fontWeight:700, fontSize:18, color: isSel ? '#000' : LABEL, lineHeight:1.1 }}>{fmtNum(d)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ padding:'0 16px' }}>
+            {dayMatches.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'40px 20px', color:LABEL2, fontSize:13 }}>No matches this day.</div>
+            ) : dayMatches.map(m => <MatchRow key={m.id} match={m} onTap={onTapMatch}/>)}
+          </div>
+        </>
+      ) : (
+        <div style={{ margin:'0 16px', padding:'32px 20px', background:CARD, border:`1px solid ${HAIRLINE}`, borderRadius:16, textAlign:'center' }}>
+          <IconTrophy size={26} color={LABEL3} style={{ marginBottom:10 }}/>
+          <div style={{ fontSize:14, fontWeight:600, color:LABEL, marginBottom:4 }}>{ROUND_META[round].label} · {ROUND_META[round].dateRange}</div>
+          <div style={{ fontSize:12.5, color:LABEL2 }}>
+            {round === 'R16' ? 'Matchups confirmed as the Round of 32 wraps up.' : 'Matchups will be set once earlier rounds conclude.'}
+          </div>
+          {ROUND_META[round].venue && (
+            <div style={{ fontSize:12, color:LABEL2, marginTop:6 }}>{ROUND_META[round].venue.name}, {ROUND_META[round].venue.city}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   BRACKET TAB
+   ════════════════════════════════════════════════════════════════════════ */
+function BracketColumn({ title, dateRange, matches, onTapMatch, placeholder }) {
+  return (
+    <div style={{ minWidth:180, maxWidth:180, flexShrink:0 }}>
+      <div style={{ textAlign:'center', marginBottom:12 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:LABEL, letterSpacing:0.2 }}>{title}</div>
+        <div style={{ fontSize:10.5, color:LABEL2, marginTop:1 }}>{dateRange}</div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:20, justifyContent:'center', minHeight:matches.length ? 'auto' : 200 }}>
+        {matches.length > 0 ? matches.map(m => {
+          const home = TEAMS[m.home], away = TEAMS[m.away];
+          const live = isLiveStatus(m.status);
+          const homeWon = isFinalStatus(m.status) && ((m.homeScore!=null && m.homeScore>m.awayScore) || m.winnerCode===m.home);
+          const awayWon = isFinalStatus(m.status) && ((m.awayScore!=null && m.awayScore>m.homeScore) || m.winnerCode===m.away);
+          return (
+            <button key={m.id} onClick={() => onTapMatch(m)} style={{
+              background:CARD, border:`1px solid ${live?'rgba(255,59,48,0.35)':HAIRLINE}`, borderRadius:12,
+              padding:'9px 10px', cursor:'pointer', textAlign:'left', width:'100%',
+            }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:5 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:5, minWidth:0 }}>
+                  <TeamFlag code={m.home} size={14}/>
+                  <span style={{ fontSize:11.5, fontWeight: homeWon ? 700 : 500, color: awayWon ? LABEL3 : LABEL, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{home && home.name}</span>
+                </div>
+                <span style={{ fontSize:12, fontFamily:FONT_MONO, color:LABEL2, flexShrink:0 }}>{m.homeScore ?? ''}</span>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:5, minWidth:0 }}>
+                  <TeamFlag code={m.away} size={14}/>
+                  <span style={{ fontSize:11.5, fontWeight: awayWon ? 700 : 500, color: homeWon ? LABEL3 : LABEL, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{away && away.name}</span>
+                </div>
+                <span style={{ fontSize:12, fontFamily:FONT_MONO, color:LABEL2, flexShrink:0 }}>{m.awayScore ?? ''}</span>
+              </div>
+              {live && <div style={{ marginTop:5, fontSize:10, fontWeight:700, color:RED }}>● LIVE</div>}
+            </button>
+          );
+        }) : (
+          <div style={{ background:'rgba(118,118,128,0.1)', border:`1px dashed ${HAIRLINE}`, borderRadius:12, padding:'16px 10px', textAlign:'center' }}>
+            <div style={{ fontSize:11.5, color:LABEL3 }}>{placeholder || 'TBD'}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BracketTab({ matches, onTapMatch }) {
+  const byRound = r => matches.filter(m => m.round === r);
+  return (
+    <div style={{ padding:'4px 16px 16px' }}>
+      <div style={{ display:'flex', gap:14, overflowX:'auto', paddingBottom:8, scrollbarWidth:'none' }}>
+        <BracketColumn title="Round of 32" dateRange="Jun 28–Jul 3" matches={byRound('R32')} onTapMatch={onTapMatch}/>
+        <BracketColumn title="Round of 16" dateRange="Jul 4–Jul 7" matches={byRound('R16')} onTapMatch={onTapMatch} placeholder="More matchups confirmed as R32 finishes"/>
+        <BracketColumn title="Quarterfinals" dateRange="Jul 9–Jul 11" matches={byRound('QF')} onTapMatch={onTapMatch} placeholder="TBD"/>
+        <BracketColumn title="Semifinals" dateRange="Jul 14–15" matches={byRound('SF')} onTapMatch={onTapMatch} placeholder="TBD"/>
+        <BracketColumn title="Final" dateRange="Jul 19 · MetLife" matches={byRound('F')} onTapMatch={onTapMatch} placeholder="MetLife Stadium, East Rutherford"/>
+      </div>
+      <div style={{ marginTop:18, padding:'14px 16px', background:CARD, border:`1px solid ${HAIRLINE}`, borderRadius:14, display:'flex', gap:10 }}>
+        <IconTrophy size={16} color={GOLD} style={{ flexShrink:0, marginTop:1 }}/>
+        <div style={{ fontSize:12.5, color:LABEL2, lineHeight:1.5 }}>
+          Scroll sideways to follow the road to the final. The bracket fills itself in automatically as results come in — nothing to refresh.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LARGE TITLE HEADER — collapses on scroll, iOS UINavigationBar style
+   ════════════════════════════════════════════════════════════════════════ */
+function LargeTitleHeader({ title, scrollY, onRefresh, checking }) {
+  const collapsed = scrollY > 24;
+  return (
+    <div style={{ position:'sticky', top:0, zIndex:40, background: collapsed ? 'rgba(0,0,0,0.82)' : 'transparent', backdropFilter: collapsed ? 'blur(20px) saturate(180%)' : 'none', WebkitBackdropFilter: collapsed ? 'blur(20px) saturate(180%)' : 'none', borderBottom: collapsed ? `1px solid ${HAIRLINE}` : '1px solid transparent', transition:`all ${EASE} 0.25s` }}>
+      <div style={{ padding:'calc(env(safe-area-inset-top) + 8px) 16px 0' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', height: collapsed ? 32 : 44 }}>
+          <span style={{
+            fontFamily:FONT_UI, fontWeight:800, color:LABEL, transition:`all ${EASE} 0.25s`,
+            fontSize: collapsed ? 17 : 30, letterSpacing: collapsed ? 0 : -0.4,
+          }}>{title}</span>
+          <button onClick={onRefresh} style={{ background:'none', border:'none', cursor:'pointer', padding:6, display:'flex' }}>
+            <IconRefresh size={18} color={LABEL2} style={{ animation: checking ? 'spin 0.9s linear infinite' : 'none' }}/>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   TAB BAR
+   ════════════════════════════════════════════════════════════════════════ */
+const TABS = [
+  { id:'today', label:'Today', Icon: IconCalendar },
+  { id:'bracket', label:'Bracket', Icon: IconTrophy },
+];
+
+function TabBar({ active, onChange, liveCount }) {
+  return (
+    <div style={{
+      display:'flex', background:'rgba(20,20,22,0.86)', backdropFilter:'blur(24px) saturate(180%)', WebkitBackdropFilter:'blur(24px) saturate(180%)',
+      borderTop:`1px solid ${HAIRLINE}`, paddingBottom:'env(safe-area-inset-bottom)', flexShrink:0,
+    }}>
+      {TABS.map(t => {
+        const isActive = active === t.id;
+        return (
+          <button key={t.id} onClick={() => onChange(t.id)} style={{
+            flex:1, background:'none', border:'none', cursor:'pointer', padding:'8px 0 6px',
+            display:'flex', flexDirection:'column', alignItems:'center', gap:2, position:'relative',
+          }}>
+            <t.Icon size={23} color={isActive ? BLUE : LABEL2} strokeWidth={isActive ? 2.3 : 1.8}/>
+            {t.id === 'today' && liveCount > 0 && (
+              <span style={{ position:'absolute', top:5, right:'calc(50% - 16px)', width:8, height:8, borderRadius:'50%', background:RED, border:'1.5px solid #000' }}/>
+            )}
+            <span style={{ fontSize:10.5, fontWeight:600, color: isActive ? BLUE : LABEL2 }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   ROOT APP
+   ════════════════════════════════════════════════════════════════════════ */
+function App() {
+  const { matches, storylines, checking, liveEngineOk, manualRefresh } = useLiveData();
+  const [tab, setTab] = useState('today');
+  const [sheetMatch, setSheetMatch] = useState(null);
+  const [scrollY, setScrollY] = useState(0);
+  const [pullDist, setPullDist] = useState(0);
+  const scrollRef = useRef(null);
+  const pullStartY = useRef(null);
+  const pulling = useRef(false);
+
+  const liveMatches = useMemo(() => matches.filter(m => isLiveStatus(m.status)), [matches]);
+
+  const handleScroll = (e) => setScrollY(e.target.scrollTop);
+
+  const onTouchStart = (e) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      pullStartY.current = e.touches[0].clientY; pulling.current = true;
+    }
+  };
+  const onTouchMove = (e) => {
+    if (!pulling.current) return;
+    const delta = e.touches[0].clientY - pullStartY.current;
+    if (delta > 0) setPullDist(Math.min(delta * 0.5, 70));
+  };
+  const onTouchEnd = async () => {
+    if (pulling.current && pullDist > 45) { await manualRefresh(); }
+    pulling.current = false;
+    setPullDist(0);
+  };
+
+  return (
+    <div style={{ height:'100dvh', background:BG, display:'flex', flexDirection:'column', fontFamily:FONT_UI, overflow:'hidden' }}>
+      <LiveActivityCapsule liveMatches={liveMatches} onTap={setSheetMatch}/>
+
+      <LargeTitleHeader
+        title={tab === 'today' ? 'World Cup 26' : 'Bracket'}
+        scrollY={scrollY}
+        onRefresh={manualRefresh}
+        checking={checking}
+      />
+
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{ flex:1, overflowY:'auto', position:'relative' }}
+      >
+        {pullDist > 0 && (
+          <div style={{ display:'flex', justifyContent:'center', height:pullDist, alignItems:'center', overflow:'hidden' }}>
+            <IconRefresh size={18} color={LABEL2} style={{ transform:`rotate(${pullDist*4}deg)`, opacity: Math.min(pullDist/45,1) }}/>
+          </div>
+        )}
+
+        {!liveEngineOk && (
+          <div style={{ margin:'8px 16px', padding:'10px 14px', background:'rgba(255,59,48,0.1)', border:'1px solid rgba(255,59,48,0.25)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+            <span style={{ fontSize:12, color:'#FF6961' }}>Live updates paused</span>
+            <button onClick={manualRefresh} style={{ background:RED, border:'none', borderRadius:8, padding:'5px 11px', fontSize:11, fontWeight:700, color:'#fff', cursor:'pointer' }}>Retry</button>
+          </div>
+        )}
+
+        {tab === 'today' && <TodayTab matches={matches} storylines={storylines} onTapMatch={setSheetMatch}/>}
+        {tab === 'bracket' && <BracketTab matches={matches} onTapMatch={setSheetMatch}/>}
+
+        <div style={{ height:24 }}/>
+      </div>
+
+      <TabBar active={tab} onChange={setTab} liveCount={liveMatches.length}/>
+
+      {sheetMatch && <MatchSheet match={matches.find(m => m.id === sheetMatch.id) || sheetMatch} onClose={() => setSheetMatch(null)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
